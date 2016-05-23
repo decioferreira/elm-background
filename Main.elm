@@ -5,7 +5,8 @@ import Element
 import Html exposing (..)
 import Html.App as Html
 import Html.Events exposing (..)
-import Random
+import Mouse
+import Random exposing (Seed)
 import Task
 import Time exposing (Time)
 import Window
@@ -37,10 +38,12 @@ type alias Point =
   , yStart: Float
   , yEnd: Float
   , duration: Time
+  , radius: Float
   }
 
 type alias Model =
   { configuration : Configuration
+  , mousePosition : Mouse.Position
   , points : List Point
   , windowSize : Window.Size
   }
@@ -50,6 +53,7 @@ type alias Model =
 
 type Msg
   = Tick Time
+  | MouseMove Mouse.Position
   | WindowResize Window.Size
   | NoOp
 
@@ -101,6 +105,9 @@ update msg model =
       in
         (model', Cmd.none)
 
+    MouseMove position ->
+      ({ model | mousePosition = position }, Cmd.none)
+
     WindowResize newWindowSize ->
       let
         points' = positionModelPoints model.configuration newWindowSize model.points
@@ -113,21 +120,36 @@ update msg model =
 
 -- VIEW
 
-displayPoint : Point -> Form
-displayPoint { x, xOrigin, y, yOrigin } =
+distanceBetweenTwoPoints : (Float, Float) -> (Float, Float) -> Float
+distanceBetweenTwoPoints (x1, y1) (x2, y2) =
+  ((x1 - x2)^2 + (y1 - y2)^2)
+
+displayPoint : Window.Size -> Mouse.Position -> Point -> Form
+displayPoint windowSize mousePosition { x, xOrigin, y, yOrigin, radius } =
   let
-    randomRadius = 2 -- + (Random.float 0 1)
+    xMouse = (toFloat mousePosition.x) - ((toFloat windowSize.width) / 2)
+    yMouse = -(toFloat mousePosition.y) + ((toFloat windowSize.height) / 2)
+    distance = distanceBetweenTwoPoints (xMouse, yMouse) (xOrigin, yOrigin)
+      |> abs
+    active = if distance < 4000 then
+      { lines = 0.3, circle = 0.6 }
+    else if distance < 20000 then
+      { lines = 0.1, circle = 0.3 }
+    else if distance < 40000 then
+      { lines = 0.02, circle = 0.1 }
+    else
+      { lines = 0, circle = 0 }
   in
-    Collage.filled (Color.rgba 0 0 0 0.3) (Collage.circle randomRadius)
+    Collage.filled (Color.rgba 0 0 0 active.circle) (Collage.circle radius)
       |> Collage.move (xOrigin, yOrigin)
       |> Collage.move (x, y)
 
 
 view : Model -> Html Msg
-view { points, windowSize } =
+view { mousePosition, points, windowSize } =
   body []
     [
-      List.map displayPoint points
+      List.map (displayPoint windowSize mousePosition) points
         |> Collage.collage windowSize.width windowSize.height
         |> Element.container windowSize.width windowSize.height Element.middle
         |> Element.toHtml
@@ -140,11 +162,20 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
   Sub.batch
     [ AnimationFrame.diffs Tick
+    , Mouse.moves MouseMove
     , Window.resizes WindowResize
     ]
 
 
 -- INIT
+
+addRandomRadius : Point -> (List Point, Seed) -> (List Point, Seed)
+addRandomRadius point (points, seed) =
+  let
+    (randomRadius, seed') = Random.step (Random.float 0 2) seed
+    point' = { point | radius = point.radius + randomRadius }
+  in
+    (points ++ [point'], seed')
 
 init : (Model, Cmd Msg)
 init =
@@ -159,14 +190,19 @@ init =
       , yStart = 0
       , yEnd = 0
       , duration = 0
+      , radius = 2
       }
     configuration =
       { columns = 20
       , rows = 20
       }
+    points = List.repeat ((configuration.columns + 1) * (configuration.rows + 1)) defaultPoint
+      |> List.foldr addRandomRadius ([], Random.initialSeed 31415)
+      |> fst
     model =
       { configuration = configuration
-      , points = List.repeat ((configuration.columns + 1) * (configuration.rows + 1)) defaultPoint
+      , mousePosition = { x = 0, y = 0 }
+      , points = points
       , windowSize = { width = 0, height = 0 }
       }
   in
