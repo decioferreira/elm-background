@@ -38,6 +38,7 @@ type alias Point =
   , yStart: Float
   , yEnd: Float
   , duration: Time
+  , elapsed: Time
   , radius: Float
   }
 
@@ -46,6 +47,7 @@ type alias Model =
   , mousePosition : Mouse.Position
   , points : List Point
   , windowSize : Window.Size
+  , seed : Seed
   }
 
 
@@ -81,18 +83,34 @@ positionModelPoints configuration windowSize points =
     List.map2 (positionModelPoint configuration windowSize) points positions
 
 
-animatePoint : Time -> Point -> Point
-animatePoint elapsed point =
-  point
+easing: Time -> Float -> Float -> Time -> Float
+easing t b c d =
+  (((c * t) / d) + b)
+
+
+animatePoint : Time -> Point -> (List Point, Seed) -> (List Point, Seed)
+animatePoint elapsed point (points, seed) =
+  if point.elapsed > point.duration then
+    let
+      (point', seed') = resetRandomEndPosition ({ point | elapsed = 0, xStart = point.xEnd, yStart = point.yEnd }, seed)
+        |> resetRandomDuration
+    in
+      (points ++ [point'], seed')
+  else
+    let
+      elapsed' = point.elapsed + elapsed
+      x = easing elapsed' point.xStart (point.xEnd - point.xStart) point.duration
+      y = easing elapsed' point.yStart (point.yEnd - point.yStart) point.duration
+    in
+      (points ++ [{ point | elapsed = elapsed', x = x, y = y }], seed)
 
 
 animate : Time -> Model -> Model
 animate elapsed model =
   let
-    points = model.points
-      |> List.map (animatePoint elapsed)
+    (points, seed) = List.foldr (animatePoint elapsed) ([], model.seed) model.points
   in
-    { model | points = points }
+    { model | points = points, seed = seed }
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -111,7 +129,6 @@ update msg model =
     WindowResize newWindowSize ->
       let
         points' = positionModelPoints model.configuration newWindowSize model.points
-        log = Debug.log "points'" points'
       in
         ( { model | points = points', windowSize = newWindowSize }, Cmd.none )
 
@@ -123,6 +140,7 @@ update msg model =
 distanceBetweenTwoPoints : (Float, Float) -> (Float, Float) -> Float
 distanceBetweenTwoPoints (x1, y1) (x2, y2) =
   ((x1 - x2)^2 + (y1 - y2)^2)
+
 
 displayPoint : Window.Size -> Mouse.Position -> Point -> Form
 displayPoint windowSize mousePosition { x, xOrigin, y, yOrigin, radius } =
@@ -169,13 +187,40 @@ subscriptions model =
 
 -- INIT
 
-addRandomRadius : Point -> (List Point, Seed) -> (List Point, Seed)
-addRandomRadius point (points, seed) =
+addRandomData : Point -> (List Point, Seed) -> (List Point, Seed)
+addRandomData point (points, seed) =
   let
-    (randomRadius, seed') = Random.step (Random.float 0 2) seed
-    point' = { point | radius = point.radius + randomRadius }
+    (point', seed') = addRandomRadius (point, seed)
+      |> resetRandomEndPosition
+      |> resetRandomDuration
   in
     (points ++ [point'], seed')
+
+
+addRandomRadius : (Point, Seed) -> (Point, Seed)
+addRandomRadius (point, seed) =
+  let
+    (randomRadius, seed') = Random.step (Random.float 0 2) seed
+  in
+    ({ point | radius = point.radius + randomRadius }, seed')
+
+
+resetRandomEndPosition : (Point, Seed) -> (Point, Seed)
+resetRandomEndPosition (point, seed) =
+  let
+    randomRange = (Random.float -50 50)
+    ((xEnd, yEnd), seed') = Random.step (Random.pair randomRange randomRange) seed
+  in
+    ({ point | xEnd = xEnd , yEnd = yEnd }, seed')
+
+
+resetRandomDuration : (Point, Seed) -> (Point, Seed)
+resetRandomDuration (point, seed) =
+  let
+    (duration, seed') = Random.step (Random.float 1000 2000) seed
+  in
+    ({ point | duration = duration }, seed')
+
 
 init : (Model, Cmd Msg)
 init =
@@ -190,6 +235,7 @@ init =
       , yStart = 0
       , yEnd = 0
       , duration = 0
+      , elapsed = 0
       , radius = 2
       }
     configuration =
@@ -197,13 +243,14 @@ init =
       , rows = 20
       }
     points = List.repeat ((configuration.columns + 1) * (configuration.rows + 1)) defaultPoint
-      |> List.foldr addRandomRadius ([], Random.initialSeed 31415)
+      |> List.foldr addRandomData ([], Random.initialSeed 31415)
       |> fst
     model =
       { configuration = configuration
       , mousePosition = { x = 0, y = 0 }
       , points = points
       , windowSize = { width = 0, height = 0 }
+      , seed = Random.initialSeed 31415
       }
   in
     ( model
