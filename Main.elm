@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Array
 import AnimationFrame
 import Collage exposing (Form)
 import Color
@@ -43,6 +44,7 @@ type alias Point =
     , yOrigin : Float
     , yStart : Float
     , yEnd : Float
+    , closest : List Int
     , duration : Time
     , elapsed : Time
     , radius : Float
@@ -64,6 +66,7 @@ type alias Model =
 
 type Msg
     = Tick Time
+    | Init Window.Size
     | MouseMove Mouse.Position
     | WindowResize Window.Size
     | NoOp
@@ -100,6 +103,27 @@ positionModelPoints configuration windowSize points =
         List.map2 (positionModelPoint configuration windowSize) points positions
 
 
+sortByDistanceToPoint : Point -> ( Int, Point ) -> Float
+sortByDistanceToPoint point ( index, point' ) =
+    distanceBetweenTwoPoints ( point.x + point.xOrigin, point.y + point.yOrigin ) ( point'.x + point'.xOrigin, point'.y + point'.yOrigin )
+
+
+findClosestPointsForPoint : List Point -> Point -> Point
+findClosestPointsForPoint points point =
+    { point
+        | closest =
+            List.map fst
+                <| List.take 5
+                <| List.sortBy (sortByDistanceToPoint point)
+                <| List.indexedMap (,) points
+    }
+
+
+findClosestPoints : List Point -> List Point
+findClosestPoints points =
+    List.map (findClosestPointsForPoint points) points
+
+
 easing : Time -> Float -> Float -> Time -> Float
 easing t b c d =
     (((c * t) / d) + b)
@@ -132,7 +156,7 @@ animate : Time -> Model -> Model
 animate elapsed model =
     let
         ( points, seed ) =
-            List.foldr (animatePoint elapsed) ( [], model.seed ) model.points
+            List.foldl (animatePoint elapsed) ( [], model.seed ) model.points
     in
         { model | points = points, seed = seed }
 
@@ -148,13 +172,25 @@ update msg model =
             in
                 ( model', Cmd.none )
 
+        Init newWindowSize ->
+            let
+                points' =
+                    positionModelPoints model.configuration newWindowSize model.points
+                        |> findClosestPoints
+            in
+                ( { model | points = points', windowSize = newWindowSize }, Cmd.none )
+
         MouseMove position ->
             ( { model | mousePosition = position }, Cmd.none )
 
         WindowResize newWindowSize ->
             let
+                a =
+                    Debug.log "size" newWindowSize
+
                 points' =
-                    positionModelPoints model.configuration newWindowSize model.points
+                    Debug.log "points"
+                        <| positionModelPoints model.configuration newWindowSize model.points
             in
                 ( { model | points = points', windowSize = newWindowSize }, Cmd.none )
 
@@ -168,12 +204,36 @@ update msg model =
 
 distanceBetweenTwoPoints : ( Float, Float ) -> ( Float, Float ) -> Float
 distanceBetweenTwoPoints ( x1, y1 ) ( x2, y2 ) =
-    ((x1 - x2) ^ 2 + (y1 - y2) ^ 2)
-
-
-displayPoint : Window.Size -> Mouse.Position -> Point -> Form
-displayPoint windowSize mousePosition { x, xOrigin, y, yOrigin, radius } =
     let
+        debug =
+            Debug.log "log" ( x1, y1, x2, y2, (((x1 - x2) ^ 2) + ((y1 - y2) ^ 2)) )
+    in
+        (((x1 - x2) ^ 2) + ((y1 - y2) ^ 2))
+
+
+createLines : Array.Array Point -> Float -> Point -> Int -> Maybe Form
+createLines points active point closestPointIndex =
+    let
+        closestPoint =
+            Array.get closestPointIndex points
+    in
+        case closestPoint of
+            Just closestPoint' ->
+                Just
+                    (Collage.traced (Collage.solid (Color.rgba 0 0 0 active))
+                        <| Collage.segment ( point.x + point.xOrigin, point.y + point.yOrigin ) ( closestPoint'.x + closestPoint'.xOrigin, closestPoint'.y + closestPoint'.yOrigin )
+                    )
+
+            Nothing ->
+                Nothing
+
+
+displayPoint : List Point -> Window.Size -> Mouse.Position -> Point -> Form
+displayPoint points windowSize mousePosition point =
+    let
+        { x, xOrigin, y, yOrigin, radius, closest } =
+            point
+
         xMouse =
             (toFloat mousePosition.x) - ((toFloat windowSize.width) / 2)
 
@@ -192,17 +252,21 @@ displayPoint windowSize mousePosition { x, xOrigin, y, yOrigin, radius } =
             else if distance < 40000 then
                 { lines = 0.02, circle = 0.1 }
             else
-                { lines = 0, circle = 0 }
+                { lines = 0.1, circle = 0.1 }
     in
-        Collage.filled (Color.rgba 0 0 0 active.circle) (Collage.circle radius)
-            |> Collage.move ( xOrigin, yOrigin )
-            |> Collage.move ( x, y )
+        Collage.group
+            ((Collage.filled (Color.rgba 0 0 0 active.circle) (Collage.circle radius)
+                |> Collage.move ( xOrigin, yOrigin )
+                |> Collage.move ( x, y )
+             )
+                :: (List.filterMap (createLines (Array.fromList points) active.lines point) closest)
+            )
 
 
 view : Model -> Html Msg
 view { mousePosition, points, windowSize } =
     body []
-        [ List.map (displayPoint windowSize mousePosition) points
+        [ List.map (displayPoint points windowSize mousePosition) points
             |> Collage.collage windowSize.width windowSize.height
             |> Element.container windowSize.width windowSize.height Element.middle
             |> Element.toHtml
@@ -279,6 +343,7 @@ init =
             , yOrigin = 0
             , yStart = 0
             , yEnd = 0
+            , closest = []
             , duration = 0
             , elapsed = 0
             , radius = 2
@@ -304,6 +369,6 @@ init =
     in
         ( model
         , Cmd.batch
-            [ Task.perform (always NoOp) WindowResize Window.size
+            [ Task.perform (always NoOp) Init Window.size
             ]
         )
