@@ -1,9 +1,13 @@
 # ELM Background
 
-To see it running run:
+## Run
 
 ```bash
 elm reactor
 ```
 
-And open http://localhost:8000/Main.elm
+Open http://localhost:8000/Main.elm.
+
+## Inspiration
+
+[Codrops - Animated Background Headers](http://tympanus.net/Development/AnimatedHeaderBackgrounds/)
