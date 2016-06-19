@@ -10936,7 +10936,13 @@ var _user$project$Main$view = function (_p22) {
 };
 var _user$project$Main$easing = F4(
 	function (t, b, c, d) {
-		return ((c * t) / d) + b;
+		var t$ = t / (d / 2);
+		if (_elm_lang$core$Native_Utils.cmp(t$, 1) < 0) {
+			return (((0 - c) / 2) * (_elm_lang$core$Basics$sqrt(1 - (t$ * t$)) - 1)) + b;
+		} else {
+			var t$$ = t$ - 2;
+			return ((c / 2) * (_elm_lang$core$Basics$sqrt(1 - (t$$ * t$$)) + 1)) + b;
+		}
 	});
 var _user$project$Main$animatePoint = F3(
 	function (elapsed, point, _p26) {
