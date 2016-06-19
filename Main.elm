@@ -7,7 +7,6 @@ import Color
 import Element
 import Html exposing (..)
 import Html.App as Html
-import Html.Events exposing (..)
 import Mouse
 import Random exposing (Seed)
 import Task
