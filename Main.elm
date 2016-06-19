@@ -125,7 +125,19 @@ findClosestPoints points =
 
 easing : Time -> Float -> Float -> Time -> Float
 easing t b c d =
-    (((c * t) / d) + b)
+    -- (((c * t) / d) + b)
+    let
+        t' =
+            t / (d / 2)
+    in
+        if t' < 1 then
+            -c / 2 * (sqrt (1 - t' * t') - 1) + b
+        else
+            let
+                t'' =
+                    t' - 2
+            in
+                c / 2 * (sqrt (1 - t'' * t'') + 1) + b
 
 
 animatePoint : Time -> Point -> ( List Point, Seed ) -> ( List Point, Seed )
