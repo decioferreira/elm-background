@@ -204,11 +204,7 @@ update msg model =
 
 distanceBetweenTwoPoints : ( Float, Float ) -> ( Float, Float ) -> Float
 distanceBetweenTwoPoints ( x1, y1 ) ( x2, y2 ) =
-    let
-        debug =
-            Debug.log "log" ( x1, y1, x2, y2, (((x1 - x2) ^ 2) + ((y1 - y2) ^ 2)) )
-    in
-        (((x1 - x2) ^ 2) + ((y1 - y2) ^ 2))
+    (((x1 - x2) ^ 2) + ((y1 - y2) ^ 2))
 
 
 createLines : Array.Array Point -> Float -> Point -> Int -> Maybe Form
@@ -218,17 +214,17 @@ createLines points active point closestPointIndex =
             Array.get closestPointIndex points
     in
         case closestPoint of
-            Just closestPoint' ->
+            Just closestPoint ->
                 Just
                     (Collage.traced (Collage.solid (Color.rgba 0 0 0 active))
-                        <| Collage.segment ( point.x + point.xOrigin, point.y + point.yOrigin ) ( closestPoint'.x + closestPoint'.xOrigin, closestPoint'.y + closestPoint'.yOrigin )
+                        <| Collage.segment ( point.x + point.xOrigin, point.y + point.yOrigin ) ( closestPoint.x + closestPoint.xOrigin, closestPoint.y + closestPoint.yOrigin )
                     )
 
             Nothing ->
                 Nothing
 
 
-displayPoint : List Point -> Window.Size -> Mouse.Position -> Point -> Form
+displayPoint : List Point -> Window.Size -> Mouse.Position -> Point -> Maybe Form
 displayPoint points windowSize mousePosition point =
     let
         { x, xOrigin, y, yOrigin, radius, closest } =
@@ -246,27 +242,34 @@ displayPoint points windowSize mousePosition point =
 
         active =
             if distance < 4000 then
-                { lines = 0.3, circle = 0.6 }
+                Just { lines = 0.3, circle = 0.6 }
             else if distance < 20000 then
-                { lines = 0.1, circle = 0.3 }
+                Just { lines = 0.1, circle = 0.3 }
             else if distance < 40000 then
-                { lines = 0.02, circle = 0.1 }
+                Just { lines = 0.02, circle = 0.1 }
             else
-                { lines = 0.1, circle = 0.1 }
+                Nothing
     in
-        Collage.group
-            ((Collage.filled (Color.rgba 0 0 0 active.circle) (Collage.circle radius)
-                |> Collage.move ( xOrigin, yOrigin )
-                |> Collage.move ( x, y )
-             )
-                :: (List.filterMap (createLines (Array.fromList points) active.lines point) closest)
-            )
+        case active of
+            Just active ->
+                Just
+                    (Collage.group
+                        ((Collage.filled (Color.rgba 0 0 0 active.circle) (Collage.circle radius)
+                            |> Collage.move ( xOrigin, yOrigin )
+                            |> Collage.move ( x, y )
+                         )
+                            :: (List.filterMap (createLines (Array.fromList points) active.lines point) closest)
+                        )
+                    )
+
+            Nothing ->
+                Nothing
 
 
 view : Model -> Html Msg
 view { mousePosition, points, windowSize } =
     body []
-        [ List.map (displayPoint points windowSize mousePosition) points
+        [ List.filterMap (displayPoint points windowSize mousePosition) points
             |> Collage.collage windowSize.width windowSize.height
             |> Element.container windowSize.width windowSize.height Element.middle
             |> Element.toHtml
