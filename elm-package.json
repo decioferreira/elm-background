@@ -1,7 +1,7 @@
 {
     "version": "1.0.0",
-    "summary": "ARIC Web Application",
-    "repository": "https://github.com/user/project.git",
+    "summary": "Elm Background",
+    "repository": "https://github.com/decioferreira/elm-background.git",
     "license": "BSD3",
     "source-directories": [
         "."
