@@ -6,7 +6,7 @@
 elm reactor
 ```
 
-Open (Main.elm)[http://localhost:8000/Main.elm].
+Open [Main.elm](http://localhost:8000/Main.elm).
 
 ## Inspiration
 
