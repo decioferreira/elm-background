@@ -4,6 +4,7 @@ import Array
 import AnimationFrame
 import Collage exposing (Form)
 import Color
+import Debug
 import Element
 import Html exposing (..)
 import Html.App as Html
@@ -54,7 +55,7 @@ type alias Model =
     { configuration : Configuration
     , mousePosition : Mouse.Position
     , points : List Point
-    , windowSize : Window.Size
+    , windowSize : Maybe Window.Size
     , seed : Seed
     }
 
@@ -68,7 +69,6 @@ type Msg
     | Init Window.Size
     | MouseMove Mouse.Position
     | WindowResize Window.Size
-    | NoOp
 
 
 positionModelPoint : Configuration -> Window.Size -> Point -> ( Int, Int ) -> Point
@@ -189,24 +189,17 @@ update msg model =
                     positionModelPoints model.configuration newWindowSize model.points
                         |> findClosestPoints
             in
-                ( { model | points = points', windowSize = newWindowSize }, Cmd.none )
+                ( { model | points = points', windowSize = Just newWindowSize }, Cmd.none )
 
         MouseMove position ->
             ( { model | mousePosition = position }, Cmd.none )
 
         WindowResize newWindowSize ->
             let
-                a =
-                    Debug.log "size" newWindowSize
-
                 points' =
-                    Debug.log "points"
-                        <| positionModelPoints model.configuration newWindowSize model.points
+                    positionModelPoints model.configuration newWindowSize model.points
             in
-                ( { model | points = points', windowSize = newWindowSize }, Cmd.none )
-
-        NoOp ->
-            ( model, Cmd.none )
+                ( { model | points = points', windowSize = Just newWindowSize }, Cmd.none )
 
 
 
@@ -279,12 +272,17 @@ displayPoint points windowSize mousePosition point =
 
 view : Model -> Html Msg
 view { mousePosition, points, windowSize } =
-    body []
-        [ List.filterMap (displayPoint points windowSize mousePosition) points
-            |> Collage.collage windowSize.width windowSize.height
-            |> Element.container windowSize.width windowSize.height Element.middle
-            |> Element.toHtml
-        ]
+    case windowSize of
+        Just windowSize ->
+            body []
+                [ List.filterMap (displayPoint points windowSize mousePosition) points
+                    |> Collage.collage windowSize.width windowSize.height
+                    |> Element.container windowSize.width windowSize.height Element.middle
+                    |> Element.toHtml
+                ]
+
+        Nothing ->
+            body [] []
 
 
 
@@ -377,12 +375,12 @@ init =
             { configuration = configuration
             , mousePosition = { x = 0, y = 0 }
             , points = points
-            , windowSize = { width = 0, height = 0 }
+            , windowSize = Nothing
             , seed = Random.initialSeed 31415
             }
     in
         ( model
         , Cmd.batch
-            [ Task.perform (always NoOp) Init Window.size
+            [ Task.perform (\_ -> Debug.crash "This failure cannot happen.") Init Window.size
             ]
         )
